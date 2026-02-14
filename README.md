@@ -83,7 +83,9 @@ The only original thing being done is the editing and gathering of all materials
 
 6. Visit [the Reddit Apps page](https://www.reddit.com/prefs/apps), and set up an app that is a "script". Paste any URL in the redirect URL field, for example: `https://jasoncameron.dev`.
 
-7. The bot will prompt you to fill in your details to connect to the Reddit API and configure the bot to your liking.
+7. The bot will prompt you to configure settings.
+   - Use Reddit API mode (default): fill in your Reddit API credentials.
+   - Use manual mode (no Reddit API): set `reddit.thread.source = "manual"` in `config.toml`, then fill `reddit.thread.manual_title`, `reddit.thread.manual_post`, and optional `reddit.thread.manual_comments` (split comments with `||`).
 
 8. Enjoy 😎
 

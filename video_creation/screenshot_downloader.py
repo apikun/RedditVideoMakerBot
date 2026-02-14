@@ -10,10 +10,37 @@ from rich.progress import track
 from utils import settings
 from utils.console import print_step, print_substep
 from utils.imagenarator import imagemaker
+from utils.fonts import getheight
 from utils.playwright import clear_cookie_by_name
 from utils.videos import save_data
 
 __all__ = ["get_screenshots_of_reddit_posts"]
+
+
+def _build_manual_image(image_path: str, title: str, body: str, bg_color, txt_color):
+    from PIL import Image, ImageDraw, ImageFont
+
+    image = Image.new("RGBA", (1080, 1920), bg_color)
+    draw = ImageDraw.Draw(image)
+    title_font = ImageFont.truetype("fonts/Roboto-Bold.ttf", 56)
+    body_font = ImageFont.truetype("fonts/Roboto-Regular.ttf", 42)
+
+    def draw_wrapped(text, font, y, max_width=960, line_pad=14):
+        import textwrap
+
+        lines = []
+        for paragraph in text.splitlines() or [text]:
+            width = 45 if font.size >= 50 else 52
+            lines.extend(textwrap.wrap(paragraph, width=width) or [""])
+        for line in lines:
+            draw.text((60, y), line, font=font, fill=txt_color)
+            y += getheight(font, line or "A") + line_pad
+        return y
+
+    y_pos = 80
+    y_pos = draw_wrapped(title or "Untitled", title_font, y_pos) + 24
+    y_pos = draw_wrapped(body or "", body_font, y_pos)
+    image.save(image_path)
 
 
 def get_screenshots_of_reddit_posts(reddit_object: dict, screenshot_num: int):
@@ -33,6 +60,54 @@ def get_screenshots_of_reddit_posts(reddit_object: dict, screenshot_num: int):
     reddit_id = re.sub(r"[^\w\s-]", "", reddit_object["thread_id"])
     # ! Make sure the reddit screenshots folder exists
     Path(f"assets/temp/{reddit_id}/png").mkdir(parents=True, exist_ok=True)
+
+    source_mode: Final[str] = settings.config["reddit"]["thread"].get("source", "reddit")
+
+    if source_mode == "manual":
+        print_step("Generating screenshots from manual text input...")
+        if settings.config["settings"]["theme"] == "light":
+            bgcolor = (255, 255, 255, 255)
+            txtcolor = (0, 0, 0)
+        else:
+            bgcolor = (33, 33, 36, 255)
+            txtcolor = (240, 240, 240)
+
+        _build_manual_image(
+            f"assets/temp/{reddit_id}/png/title.png",
+            reddit_object.get("thread_title", ""),
+            reddit_object.get("thread_post", "") if isinstance(reddit_object.get("thread_post", ""), str) else "",
+            bgcolor,
+            txtcolor,
+        )
+
+        if storymode:
+            if settings.config["settings"]["storymodemethod"] == 1:
+                print_substep("Generating story images from manual text...")
+                return imagemaker(
+                    theme=bgcolor,
+                    reddit_obj=reddit_object,
+                    txtclr=txtcolor,
+                    transparent=False,
+                )
+            _build_manual_image(
+                f"assets/temp/{reddit_id}/png/story_content.png",
+                "",
+                reddit_object.get("thread_post", "") if isinstance(reddit_object.get("thread_post", ""), str) else "",
+                bgcolor,
+                txtcolor,
+            )
+        else:
+            for idx, comment in enumerate(reddit_object.get("comments", [])[:screenshot_num]):
+                _build_manual_image(
+                    f"assets/temp/{reddit_id}/png/comment_{idx}.png",
+                    f"Comment {idx + 1}",
+                    comment.get("comment_body", ""),
+                    bgcolor,
+                    txtcolor,
+                )
+
+        print_substep("Manual screenshots generated successfully.", style="bold green")
+        return
 
     # set the theme and turn off non-essential cookies
     if settings.config["settings"]["theme"] == "dark":
