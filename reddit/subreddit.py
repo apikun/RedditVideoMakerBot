@@ -1,4 +1,5 @@
 import re
+from typing import List
 
 import praw
 from praw.models import MoreComments
@@ -13,10 +14,64 @@ from utils.videos import check_done
 from utils.voice import sanitize_text
 
 
+def _manual_comments_from_string(raw_comments: str) -> List[dict]:
+    comments: List[dict] = []
+    for idx, comment in enumerate([item.strip() for item in raw_comments.split("||") if item.strip()]):
+        comments.append(
+            {
+                "comment_body": comment,
+                "comment_url": f"manual/comment/{idx}",
+                "comment_id": f"manual_{idx}",
+            }
+        )
+    return comments
+
+
+def get_manual_thread():
+    thread_config = settings.config["reddit"]["thread"]
+    title = thread_config.get("manual_title", "")
+    post = thread_config.get("manual_post", "")
+
+    if not title:
+        title = input("Manual mode - Enter post title: ").strip()
+    if not post:
+        post = input("Manual mode - Enter post text/body: ").strip()
+
+    raw_comments = thread_config.get("manual_comments", "")
+    comments = _manual_comments_from_string(raw_comments)
+
+    content = {
+        "thread_url": "manual://post",
+        "thread_title": title,
+        "thread_id": "manual",
+        "is_nsfw": False,
+        "thread_post": posttextparser(post)
+        if settings.config["settings"]["storymode"] and settings.config["settings"]["storymodemethod"] == 1
+        else post,
+        "comments": comments if not settings.config["settings"]["storymode"] else [],
+    }
+
+    if (
+        not settings.config["settings"]["storymode"]
+        and len(content["comments"]) == 0
+    ):
+        print_substep(
+            "Manual mode has no comments configured. Set reddit.thread.manual_comments in config.toml.",
+            style="yellow",
+        )
+
+    print_substep("Using manual post input (no Reddit API).", style="bold green")
+    return content
+
+
 def get_subreddit_threads(POST_ID: str):
     """
     Returns a list of threads from the AskReddit subreddit.
     """
+
+    if settings.config["reddit"]["thread"].get("source", "reddit") == "manual":
+        print_step("Loading manual post content...")
+        return get_manual_thread()
 
     print_substep("Logging into Reddit.")
 
